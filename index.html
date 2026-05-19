@@ -522,6 +522,87 @@ function animate(){
 animate();
 
 </script>
+<script type="module">
 
+import { initializeApp }
+from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+
+import {
+    getDatabase,
+    ref,
+    set,
+    onValue
+}
+from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+const firebaseConfig = {
+
+    apiKey:"TU_API_KEY",
+    authDomain:"TU_DOMAIN",
+    databaseURL:"TU_DB_URL",
+    projectId:"TU_PROJECT_ID",
+    storageBucket:"TU_BUCKET",
+    messagingSenderId:"TU_ID",
+    appId:"TU_APP_ID"
+};
+
+const app = initializeApp(firebaseConfig);
+
+const db = getDatabase(app);
+
+//////////////////////////////////////////////////////
+// ID UNICO DEL TELEFONO
+//////////////////////////////////////////////////////
+
+const clientId =
+Math.random().toString(36).slice(2);
+
+//////////////////////////////////////////////////////
+// ENVIAR VIBRACION
+//////////////////////////////////////////////////////
+
+function enviarVibracion(){
+
+    set(
+        ref(db,"vibration"),
+        {
+            sender:clientId,
+            time:Date.now()
+        }
+    );
+}
+
+//////////////////////////////////////////////////////
+// RECIBIR VIBRACION
+//////////////////////////////////////////////////////
+
+onValue(
+    ref(db,"vibration"),
+    snapshot=>{
+
+        const data = snapshot.val();
+
+        if(!data) return;
+
+        // evita vibrarse a sí mismo
+        if(data.sender === clientId) return;
+
+        if(navigator.vibrate){
+
+            navigator.vibrate([80,30,80]);
+        }
+    }
+);
+
+//////////////////////////////////////////////////////
+// TOUCH
+//////////////////////////////////////////////////////
+
+window.addEventListener("touchstart",()=>{
+
+    enviarVibracion();
+});
+
+</script>
 </body>
 </html>
