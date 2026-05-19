@@ -1,10 +1,14 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8" />
+<meta name="viewport"
+content="width=device-width,
+initial-scale=1.0,
+maximum-scale=1.0,
+user-scalable=no"/>
 
-<title>Camara Web Interactiva Minimal</title>
+<title>Interactive Camera Mobile</title>
 
 <style>
 
@@ -14,108 +18,246 @@
     box-sizing:border-box;
 }
 
-body{
+html,body{
+    width:100%;
+    height:100%;
     overflow:hidden;
     background:black;
     touch-action:none;
     font-family:monospace;
 }
 
-video{
+body{
+    position:fixed;
+    inset:0;
+}
+
+video,
+canvas{
     position:absolute;
-    width:100vw;
-    height:100vh;
+    inset:0;
+    width:100%;
+    height:100%;
+}
+
+video{
     object-fit:cover;
     transform:scaleX(-1);
-    filter:contrast(1.05) saturate(1.05);
+    filter:
+    contrast(1.05)
+    saturate(1.05)
+    brightness(0.95);
 }
 
 canvas{
-    position:absolute;
-    width:100vw;
-    height:100vh;
     pointer-events:none;
 }
 
-button{
+.controls{
     position:absolute;
-    z-index:10;
-    top:20px;
-    left:20px;
-    padding:10px 14px;
-    background:black;
+    z-index:20;
+    top:env(safe-area-inset-top,20px);
+    left:0;
+    width:100%;
+    display:flex;
+    justify-content:center;
+    padding-top:12px;
+}
+
+button{
+    border:none;
+    outline:none;
+    padding:12px 18px;
+    border-radius:999px;
+    background:rgba(0,0,0,0.45);
+    backdrop-filter:blur(10px);
     color:white;
-    border:1px solid white;
-    cursor:pointer;
+    font-size:14px;
+    letter-spacing:1px;
+    border:1px solid rgba(255,255,255,0.15);
 }
 
 </style>
 </head>
 <body>
 
-<button id="switchCam">CAMBIAR CAMARA</button>
+<div class="controls">
+    <button id="switchCam">
+        CAMBIAR CAMARA
+    </button>
+</div>
 
-<video id="video" autoplay playsinline></video>
+<video
+id="video"
+autoplay
+playsinline
+muted
+></video>
+
 <canvas id="canvas"></canvas>
 
 <script>
 
+//////////////////////////////////////////////////////
+// ELEMENTOS
+//////////////////////////////////////////////////////
+
 const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
+const ctx = canvas.getContext(
+    "2d",
+    { alpha:true }
+);
 
-canvas.width = innerWidth;
-canvas.height = innerHeight;
+//////////////////////////////////////////////////////
+// RESIZE MOBILE
+//////////////////////////////////////////////////////
+
+function resizeCanvas(){
+
+    canvas.width = innerWidth * devicePixelRatio;
+    canvas.height = innerHeight * devicePixelRatio;
+
+    canvas.style.width = innerWidth + "px";
+    canvas.style.height = innerHeight + "px";
+
+    ctx.setTransform(
+        devicePixelRatio,
+        0,
+        0,
+        devicePixelRatio,
+        0,
+        0
+    );
+}
+
+resizeCanvas();
+
+window.addEventListener(
+    "resize",
+    resizeCanvas
+);
+
+//////////////////////////////////////////////////////
+// CAMARA
+//////////////////////////////////////////////////////
 
 let currentFacing = "user";
+let currentStream = null;
 
 async function iniciarCamara(){
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-        video:{
-            facingMode: currentFacing
-        },
-        audio:false
-    });
+    try{
 
-    video.srcObject = stream;
+        if(currentStream){
+
+            currentStream
+            .getTracks()
+            .forEach(track=>track.stop());
+        }
+
+        const stream =
+        await navigator.mediaDevices.getUserMedia({
+
+            video:{
+                facingMode:{
+                    ideal:currentFacing
+                },
+                width:{
+                    ideal:640
+                },
+                height:{
+                    ideal:1280
+                },
+                frameRate:{
+                    ideal:24,
+                    max:30
+                }
+            },
+
+            audio:false
+        });
+
+        currentStream = stream;
+
+        video.srcObject = stream;
+
+        if(currentFacing === "user"){
+
+            video.style.transform =
+            "scaleX(-1)";
+        }
+        else{
+
+            video.style.transform =
+            "scaleX(1)";
+        }
+
+    }catch(err){
+
+        alert(
+        "No se pudo acceder a la cámara"
+        );
+
+        console.error(err);
+    }
 }
 
 iniciarCamara();
 
-document.getElementById("switchCam").addEventListener("click",()=>{
+//////////////////////////////////////////////////////
+// CAMBIO DE CAMARA
+//////////////////////////////////////////////////////
+
+document
+.getElementById("switchCam")
+.addEventListener("click",()=>{
 
     currentFacing =
-        currentFacing === "user"
-        ? "environment"
-        : "user";
-
-    video.srcObject
-        .getTracks()
-        .forEach(track=>track.stop());
+    currentFacing === "user"
+    ? "environment"
+    : "user";
 
     iniciarCamara();
 });
 
 //////////////////////////////////////////////////////
-// BUFFER PARA DETECTAR MOVIMIENTO
+// BUFFER PEQUEÑO = MAS RAPIDO
 //////////////////////////////////////////////////////
 
-const buffer = document.createElement("canvas");
-const btx = buffer.getContext("2d");
+const buffer =
+document.createElement("canvas");
 
-buffer.width = 160;
-buffer.height = 120;
+const btx =
+buffer.getContext("2d",{
+    willReadFrequently:true
+});
+
+buffer.width = 80;
+buffer.height = 140;
 
 let previousFrame = null;
 
 let motionPoints = [];
 
+//////////////////////////////////////////////////////
+// DETECCION DE MOVIMIENTO
+//////////////////////////////////////////////////////
+
 function detectarMovimiento(){
 
-    btx.drawImage(video,0,0,buffer.width,buffer.height);
+    if(video.readyState < 2) return;
 
-    const frame = btx.getImageData(
+    btx.drawImage(
+        video,
+        0,
+        0,
+        buffer.width,
+        buffer.height
+    );
+
+    const frame =
+    btx.getImageData(
         0,
         0,
         buffer.width,
@@ -124,34 +266,45 @@ function detectarMovimiento(){
 
     if(previousFrame){
 
-        motionPoints = [];
+        motionPoints.length = 0;
 
-        for(let i=0;i<frame.data.length;i+=20){
+        for(
+            let i=0;
+            i<frame.data.length;
+            i+=32
+        ){
 
             const r = frame.data[i];
             const g = frame.data[i+1];
             const b = frame.data[i+2];
 
-            const pr = previousFrame.data[i];
-            const pg = previousFrame.data[i+1];
-            const pb = previousFrame.data[i+2];
+            const pr =
+            previousFrame.data[i];
+
+            const pg =
+            previousFrame.data[i+1];
+
+            const pb =
+            previousFrame.data[i+2];
 
             const diff =
-                Math.abs(r-pr)+
-                Math.abs(g-pg)+
-                Math.abs(b-pb);
+            Math.abs(r-pr)+
+            Math.abs(g-pg)+
+            Math.abs(b-pb);
 
-            if(diff > 140){
+            if(diff > 150){
 
                 const pixel = i/4;
 
                 const x =
-                    (pixel % buffer.width)
-                    * (canvas.width / buffer.width);
+                (pixel % buffer.width)
+                * (innerWidth / buffer.width);
 
                 const y =
-                    Math.floor(pixel / buffer.width)
-                    * (canvas.height / buffer.height);
+                Math.floor(
+                    pixel / buffer.width
+                )
+                * (innerHeight / buffer.height);
 
                 motionPoints.push({x,y});
 
@@ -164,7 +317,7 @@ function detectarMovimiento(){
 }
 
 //////////////////////////////////////////////////////
-// PARTICULAS
+// PARTICULAS MINIMAL
 //////////////////////////////////////////////////////
 
 let particulas = [];
@@ -176,14 +329,19 @@ class Particula{
         this.x = x;
         this.y = y;
 
-        this.vx = (Math.random()-0.5)*2;
-        this.vy = (Math.random()-0.5)*2;
+        this.vx =
+        (Math.random()-0.5)*1.5;
 
-        this.size = Math.random()*5+1;
+        this.vy =
+        (Math.random()-0.5)*1.5;
 
-        this.life = 100;
+        this.size =
+        Math.random()*4+1;
 
-        this.hue = Math.random()*60 + 180;
+        this.life = 80;
+
+        this.hue =
+        180 + Math.random()*80;
     }
 
     update(){
@@ -191,8 +349,8 @@ class Particula{
         this.x += this.vx;
         this.y += this.vy;
 
-        this.vx *= 0.98;
-        this.vy *= 0.98;
+        this.vx *= 0.985;
+        this.vy *= 0.985;
 
         this.life--;
     }
@@ -210,12 +368,21 @@ class Particula{
         );
 
         ctx.fillStyle =
-        `hsla(${this.hue},100%,70%,${this.life/400})`;
+        `hsla(
+            ${this.hue},
+            100%,
+            70%,
+            ${this.life/500}
+        )`;
 
-        ctx.shadowBlur = 8;
+        ctx.shadowBlur = 6;
 
         ctx.shadowColor =
-        `hsl(${this.hue},100%,70%)`;
+        `hsl(
+            ${this.hue},
+            100%,
+            70%
+        )`;
 
         ctx.fill();
     }
@@ -223,41 +390,37 @@ class Particula{
 
 function crearExplosion(x,y){
 
-    for(let i=0;i<2;i++){
+    for(let i=0;i<1;i++){
 
         particulas.push(
             new Particula(x,y)
         );
     }
+
+    // LIMITE PARA CELULAR
+    if(particulas.length > 120){
+
+        particulas.splice(
+            0,
+            particulas.length - 120
+        );
+    }
 }
 
 //////////////////////////////////////////////////////
-// INTERACCION MANUAL
-//////////////////////////////////////////////////////
-
-window.addEventListener("mousemove",(e)=>{
-
-    crearExplosion(e.clientX,e.clientY);
-});
-
-window.addEventListener("touchmove",(e)=>{
-
-    for(let touch of e.touches){
-
-        crearExplosion(
-            touch.clientX,
-            touch.clientY
-        );
-    }
-});
-
-//////////////////////////////////////////////////////
-// DEGRADE SUAVE
+// DEGRADE REACTIVO
 //////////////////////////////////////////////////////
 
 function drawGradient(){
 
-    motionPoints.forEach(point=>{
+    for(
+        let i=0;
+        i<motionPoints.length;
+        i+=4
+    ){
+
+        const point =
+        motionPoints[i];
 
         const gradient =
         ctx.createRadialGradient(
@@ -266,17 +429,17 @@ function drawGradient(){
             0,
             point.x,
             point.y,
-            180
+            120
         );
 
         gradient.addColorStop(
             0,
-            "rgba(0,255,255,0.08)"
+            "rgba(0,255,255,0.05)"
         );
 
         gradient.addColorStop(
             0.5,
-            "rgba(255,0,255,0.04)"
+            "rgba(255,0,255,0.03)"
         );
 
         gradient.addColorStop(
@@ -287,16 +450,37 @@ function drawGradient(){
         ctx.fillStyle = gradient;
 
         ctx.fillRect(
-            point.x-180,
-            point.y-180,
-            360,
-            360
+            point.x - 120,
+            point.y - 120,
+            240,
+            240
         );
-    });
+    }
 }
 
 //////////////////////////////////////////////////////
-// ANIMACION
+// TOUCH INTERACTION
+//////////////////////////////////////////////////////
+
+window.addEventListener(
+    "touchmove",
+    e=>{
+
+        for(
+            let touch of e.touches
+        ){
+
+            crearExplosion(
+                touch.clientX,
+                touch.clientY
+            );
+        }
+    },
+    { passive:true }
+);
+
+//////////////////////////////////////////////////////
+// LOOP OPTIMIZADO
 //////////////////////////////////////////////////////
 
 function animate(){
@@ -305,23 +489,30 @@ function animate(){
 
     detectarMovimiento();
 
-    // TRAIL MINIMAL
-    ctx.fillStyle = "rgba(0,0,0,0.05)";
+    ctx.fillStyle =
+    "rgba(0,0,0,0.08)";
+
     ctx.fillRect(
         0,
         0,
-        canvas.width,
-        canvas.height
+        innerWidth,
+        innerHeight
     );
 
     drawGradient();
 
-    for(let i=particulas.length-1;i>=0;i--){
+    for(
+        let i=particulas.length-1;
+        i>=0;
+        i--
+    ){
 
-        particulas[i].update();
-        particulas[i].draw();
+        const p = particulas[i];
 
-        if(particulas[i].life <= 0){
+        p.update();
+        p.draw();
+
+        if(p.life <= 0){
 
             particulas.splice(i,1);
         }
@@ -329,16 +520,6 @@ function animate(){
 }
 
 animate();
-
-//////////////////////////////////////////////////////
-// RESIZE
-//////////////////////////////////////////////////////
-
-window.addEventListener("resize",()=>{
-
-    canvas.width = innerWidth;
-    canvas.height = innerHeight;
-});
 
 </script>
 
