@@ -1,395 +1,178 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Observaciones Ultrasónicas</title>
-
-<script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
+<title>Camara Web Interactiva</title>
 
 <style>
+    *{
+        margin:0;
+        padding:0;
+        box-sizing:border-box;
+    }
 
-*{
-    margin:0;
-    padding:0;
-    box-sizing:border-box;
-}
+    body{
+        overflow:hidden;
+        background:black;
+        touch-action:none;
+        font-family:monospace;
+    }
 
-body{
-    overflow:hidden;
-    background:black;
-    touch-action:none;
-}
+    video{
+        position:absolute;
+        width:100vw;
+        height:100vh;
+        object-fit:cover;
+        transform:scaleX(-1);
+    }
 
-button{
+    canvas{
+        position:absolute;
+        width:100vw;
+        height:100vh;
+        pointer-events:none;
+    }
 
-    position:absolute;
-
-    z-index:20;
-
-    top:20px;
-    left:20px;
-
-    padding:12px 16px;
-
-    background:black;
-    color:white;
-
-    border:1px solid white;
-
-    font-family:monospace;
-
-    cursor:pointer;
-}
-
-canvas{
-    display:block;
-}
-
+    button{
+        position:absolute;
+        z-index:10;
+        top:20px;
+        left:20px;
+        padding:10px 14px;
+        background:black;
+        color:white;
+        border:1px solid white;
+        cursor:pointer;
+    }
 </style>
-
 </head>
-
 <body>
 
-<button id="switchCam">
-CAMBIAR CAMARA
-</button>
+<button id="switchCam">CAMBIAR CAMARA</button>
+
+<video id="video" autoplay playsinline></video>
+<canvas id="canvas"></canvas>
 
 <script>
 
-let video;
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
 
-let prevFrame;
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
 
-let feedback;
+let currentFacing = "user";
 
-let particles = [];
+async function iniciarCamara(){
 
-let threshold = 40;
-
-let currentFacing = "environment";
-
-async function setupCamera(){
-
-    if(video && video.elt.srcObject){
-
-        video.elt.srcObject
-        .getTracks()
-        .forEach(track => track.stop());
-    }
-
-    video = createCapture({
-
+    const stream = await navigator.mediaDevices.getUserMedia({
         video:{
-            facingMode:currentFacing
+            facingMode: currentFacing
         },
-
         audio:false
-
     });
 
-    video.size(160,120);
-
-    video.hide();
+    video.srcObject = stream;
 }
 
-function setup(){
+iniciarCamara();
 
-    createCanvas(windowWidth,windowHeight);
+document.getElementById("switchCam").addEventListener("click", async ()=>{
 
-    pixelDensity(1);
+    currentFacing = currentFacing === "user" ? "environment" : "user";
 
-    feedback = createGraphics(
-        windowWidth,
-        windowHeight
-    );
+    const tracks = video.srcObject.getTracks();
 
-    setupCamera();
+    tracks.forEach(track => track.stop());
 
-    background(0);
-}
+    iniciarCamara();
+});
 
-document
-.getElementById("switchCam")
-.onclick = async ()=>{
+let particulas = [];
 
-    currentFacing =
-        currentFacing === "user"
-        ? "environment"
-        : "user";
+class Particula{
 
-    await setupCamera();
-};
-
-function draw(){
-
-    background(0);
-
-    // CAMARA BASE
-
-    push();
-
-    tint(255,45);
-
-    translate(width,0);
-
-    scale(-1,1);
-
-    image(video,0,0,width,height);
-
-    pop();
-
-    // FEEDBACK LIMPIO
-
-    feedback.push();
-
-    feedback.translate(width/2,height/2);
-
-    feedback.scale(1.0005);
-
-    feedback.tint(255,245);
-
-    feedback.image(
-
-        feedback,
-
-        -width/2,
-
-        -height/2,
-
-        width,
-
-        height
-    );
-
-    feedback.pop();
-
-    // LIMPIEZA DEL FEEDBACK
-
-    feedback.noStroke();
-
-    feedback.fill(0,40);
-
-    feedback.rect(
-        0,
-        0,
-        width,
-        height
-    );
-
-    // DETECCION MOVIMIENTO
-
-    if(video.loadedmetadata){
-
-        video.loadPixels();
-
-        if(prevFrame){
-
-            prevFrame.loadPixels();
-
-            for(let y=0;y<video.height;y+=5){
-
-                for(let x=0;x<video.width;x+=5){
-
-                    let index =
-                        (x + y * video.width) * 4;
-
-                    let r1 = video.pixels[index];
-                    let g1 = video.pixels[index+1];
-                    let b1 = video.pixels[index+2];
-
-                    let r2 = prevFrame.pixels[index];
-                    let g2 = prevFrame.pixels[index+1];
-                    let b2 = prevFrame.pixels[index+2];
-
-                    let diff =
-
-                        abs(r1-r2) +
-
-                        abs(g1-g2) +
-
-                        abs(b1-b2);
-
-                    if(diff > threshold){
-
-                        let px = map(
-                            x,
-                            0,
-                            video.width,
-                            width,
-                            0
-                        );
-
-                        let py = map(
-                            y,
-                            0,
-                            video.height,
-                            0,
-                            height
-                        );
-
-                        particles.push(
-                            new Particle(
-                                px,
-                                py,
-                                diff
-                            )
-                        );
-                    }
-                }
-            }
-        }
-
-        prevFrame = video.get();
-    }
-
-    // MODO DE LUZ
-
-    feedback.blendMode(ADD);
-
-    // PARTICULAS
-
-    for(let i=particles.length-1;i>=0;i--){
-
-        particles[i].update();
-
-        particles[i].display(feedback);
-
-        if(particles[i].life <= 0){
-
-            particles.splice(i,1);
-        }
-    }
-
-    // DIBUJAR FEEDBACK
-
-    image(feedback,0,0);
-
-    // SCANLINES
-
-    drawScanner();
-}
-
-class Particle{
-
-    constructor(x,y,e){
+    constructor(x,y){
 
         this.x = x;
-
         this.y = y;
 
-        this.energy = e;
+        this.vx = (Math.random()-0.5)*6;
+        this.vy = (Math.random()-0.5)*6;
 
-        this.life = 255;
+        this.size = Math.random()*10+2;
 
-        this.size = random(25,90);
-
-        this.vx = random(-0.3,0.3);
-
-        this.vy = random(-0.3,0.3);
+        this.life = 100;
     }
 
     update(){
 
         this.x += this.vx;
-
         this.y += this.vy;
 
-        this.life -= 4;
+        this.life--;
     }
 
-    display(g){
+    draw(){
 
-        g.noStroke();
+        ctx.beginPath();
+        ctx.arc(this.x,this.y,this.size,0,Math.PI*2);
 
-        let heat = map(
-            this.energy,
-            40,
-            255,
-            0,
-            1
-        );
+        ctx.fillStyle = `rgba(255,255,255,${this.life/100})`;
 
-        let r = lerp(0,255,heat);
-
-        let gg = lerp(80,180,heat);
-
-        let b = lerp(255,50,heat);
-
-        g.fill(
-
-            r,
-
-            gg,
-
-            b,
-
-            this.life * 0.01
-        );
-
-        g.ellipse(
-            this.x,
-            this.y,
-            this.size
-        );
+        ctx.fill();
     }
 }
 
-function drawScanner(){
+function crearExplosion(x,y){
 
-    blendMode(SCREEN);
+    for(let i=0;i<20;i++){
 
-    for(let y=0;y<height;y+=45){
-
-        let alpha = map(
-
-            sin(
-                frameCount*0.02
-                + y*0.01
-            ),
-
-            -1,
-            1,
-
-            5,
-            20
-        );
-
-        stroke(
-
-            100,
-
-            180,
-
-            255,
-
-            alpha
-        );
-
-        line(
-            0,
-            y,
-            width,
-            y
-        );
+        particulas.push(new Particula(x,y));
     }
 }
 
-function windowResized(){
+window.addEventListener("touchmove",(e)=>{
 
-    resizeCanvas(
-        windowWidth,
-        windowHeight
-    );
+    for(let touch of e.touches){
 
-    feedback = createGraphics(
-        windowWidth,
-        windowHeight
-    );
+        crearExplosion(touch.clientX,touch.clientY);
+    }
+});
+
+window.addEventListener("mousemove",(e)=>{
+
+    crearExplosion(e.clientX,e.clientY);
+});
+
+function animate(){
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    for(let i=particulas.length-1;i>=0;i--){
+
+        particulas[i].update();
+        particulas[i].draw();
+
+        if(particulas[i].life <= 0){
+
+            particulas.splice(i,1);
+        }
+    }
+
+    requestAnimationFrame(animate);
 }
+
+animate();
+
+window.addEventListener("resize",()=>{
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+});
 
 </script>
 
