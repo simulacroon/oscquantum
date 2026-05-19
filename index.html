@@ -4,48 +4,51 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Camara Web Interactiva</title>
+<title>Camara Web Interactiva Minimal</title>
 
 <style>
-    *{
-        margin:0;
-        padding:0;
-        box-sizing:border-box;
-    }
 
-    body{
-        overflow:hidden;
-        background:black;
-        touch-action:none;
-        font-family:monospace;
-    }
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
 
-    video{
-        position:absolute;
-        width:100vw;
-        height:100vh;
-        object-fit:cover;
-        transform:scaleX(-1);
-    }
+body{
+    overflow:hidden;
+    background:black;
+    touch-action:none;
+    font-family:monospace;
+}
 
-    canvas{
-        position:absolute;
-        width:100vw;
-        height:100vh;
-        pointer-events:none;
-    }
+video{
+    position:absolute;
+    width:100vw;
+    height:100vh;
+    object-fit:cover;
+    transform:scaleX(-1);
+    filter:contrast(1.05) saturate(1.05);
+}
 
-    button{
-        position:absolute;
-        z-index:10;
-        top:20px;
-        left:20px;
-        padding:10px 14px;
-        background:black;
-        color:white;
-        border:1px solid white;
-        cursor:pointer;
-    }
+canvas{
+    position:absolute;
+    width:100vw;
+    height:100vh;
+    pointer-events:none;
+}
+
+button{
+    position:absolute;
+    z-index:10;
+    top:20px;
+    left:20px;
+    padding:10px 14px;
+    background:black;
+    color:white;
+    border:1px solid white;
+    cursor:pointer;
+}
+
 </style>
 </head>
 <body>
@@ -61,8 +64,8 @@ const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+canvas.width = innerWidth;
+canvas.height = innerHeight;
 
 let currentFacing = "user";
 
@@ -80,16 +83,89 @@ async function iniciarCamara(){
 
 iniciarCamara();
 
-document.getElementById("switchCam").addEventListener("click", async ()=>{
+document.getElementById("switchCam").addEventListener("click",()=>{
 
-    currentFacing = currentFacing === "user" ? "environment" : "user";
+    currentFacing =
+        currentFacing === "user"
+        ? "environment"
+        : "user";
 
-    const tracks = video.srcObject.getTracks();
-
-    tracks.forEach(track => track.stop());
+    video.srcObject
+        .getTracks()
+        .forEach(track=>track.stop());
 
     iniciarCamara();
 });
+
+//////////////////////////////////////////////////////
+// BUFFER PARA DETECTAR MOVIMIENTO
+//////////////////////////////////////////////////////
+
+const buffer = document.createElement("canvas");
+const btx = buffer.getContext("2d");
+
+buffer.width = 160;
+buffer.height = 120;
+
+let previousFrame = null;
+
+let motionPoints = [];
+
+function detectarMovimiento(){
+
+    btx.drawImage(video,0,0,buffer.width,buffer.height);
+
+    const frame = btx.getImageData(
+        0,
+        0,
+        buffer.width,
+        buffer.height
+    );
+
+    if(previousFrame){
+
+        motionPoints = [];
+
+        for(let i=0;i<frame.data.length;i+=20){
+
+            const r = frame.data[i];
+            const g = frame.data[i+1];
+            const b = frame.data[i+2];
+
+            const pr = previousFrame.data[i];
+            const pg = previousFrame.data[i+1];
+            const pb = previousFrame.data[i+2];
+
+            const diff =
+                Math.abs(r-pr)+
+                Math.abs(g-pg)+
+                Math.abs(b-pb);
+
+            if(diff > 140){
+
+                const pixel = i/4;
+
+                const x =
+                    (pixel % buffer.width)
+                    * (canvas.width / buffer.width);
+
+                const y =
+                    Math.floor(pixel / buffer.width)
+                    * (canvas.height / buffer.height);
+
+                motionPoints.push({x,y});
+
+                crearExplosion(x,y);
+            }
+        }
+    }
+
+    previousFrame = frame;
+}
+
+//////////////////////////////////////////////////////
+// PARTICULAS
+//////////////////////////////////////////////////////
 
 let particulas = [];
 
@@ -100,12 +176,14 @@ class Particula{
         this.x = x;
         this.y = y;
 
-        this.vx = (Math.random()-0.5)*6;
-        this.vy = (Math.random()-0.5)*6;
+        this.vx = (Math.random()-0.5)*2;
+        this.vy = (Math.random()-0.5)*2;
 
-        this.size = Math.random()*10+2;
+        this.size = Math.random()*5+1;
 
         this.life = 100;
+
+        this.hue = Math.random()*60 + 180;
     }
 
     update(){
@@ -113,15 +191,31 @@ class Particula{
         this.x += this.vx;
         this.y += this.vy;
 
+        this.vx *= 0.98;
+        this.vy *= 0.98;
+
         this.life--;
     }
 
     draw(){
 
         ctx.beginPath();
-        ctx.arc(this.x,this.y,this.size,0,Math.PI*2);
 
-        ctx.fillStyle = `rgba(255,255,255,${this.life/100})`;
+        ctx.arc(
+            this.x,
+            this.y,
+            this.size,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fillStyle =
+        `hsla(${this.hue},100%,70%,${this.life/400})`;
+
+        ctx.shadowBlur = 8;
+
+        ctx.shadowColor =
+        `hsl(${this.hue},100%,70%)`;
 
         ctx.fill();
     }
@@ -129,28 +223,98 @@ class Particula{
 
 function crearExplosion(x,y){
 
-    for(let i=0;i<20;i++){
+    for(let i=0;i<2;i++){
 
-        particulas.push(new Particula(x,y));
+        particulas.push(
+            new Particula(x,y)
+        );
     }
 }
 
-window.addEventListener("touchmove",(e)=>{
-
-    for(let touch of e.touches){
-
-        crearExplosion(touch.clientX,touch.clientY);
-    }
-});
+//////////////////////////////////////////////////////
+// INTERACCION MANUAL
+//////////////////////////////////////////////////////
 
 window.addEventListener("mousemove",(e)=>{
 
     crearExplosion(e.clientX,e.clientY);
 });
 
+window.addEventListener("touchmove",(e)=>{
+
+    for(let touch of e.touches){
+
+        crearExplosion(
+            touch.clientX,
+            touch.clientY
+        );
+    }
+});
+
+//////////////////////////////////////////////////////
+// DEGRADE SUAVE
+//////////////////////////////////////////////////////
+
+function drawGradient(){
+
+    motionPoints.forEach(point=>{
+
+        const gradient =
+        ctx.createRadialGradient(
+            point.x,
+            point.y,
+            0,
+            point.x,
+            point.y,
+            180
+        );
+
+        gradient.addColorStop(
+            0,
+            "rgba(0,255,255,0.08)"
+        );
+
+        gradient.addColorStop(
+            0.5,
+            "rgba(255,0,255,0.04)"
+        );
+
+        gradient.addColorStop(
+            1,
+            "rgba(0,0,0,0)"
+        );
+
+        ctx.fillStyle = gradient;
+
+        ctx.fillRect(
+            point.x-180,
+            point.y-180,
+            360,
+            360
+        );
+    });
+}
+
+//////////////////////////////////////////////////////
+// ANIMACION
+//////////////////////////////////////////////////////
+
 function animate(){
 
-    ctx.clearRect(0,0,canvas.width,canvas.height);
+    requestAnimationFrame(animate);
+
+    detectarMovimiento();
+
+    // TRAIL MINIMAL
+    ctx.fillStyle = "rgba(0,0,0,0.05)";
+    ctx.fillRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+    drawGradient();
 
     for(let i=particulas.length-1;i>=0;i--){
 
@@ -162,16 +326,18 @@ function animate(){
             particulas.splice(i,1);
         }
     }
-
-    requestAnimationFrame(animate);
 }
 
 animate();
 
+//////////////////////////////////////////////////////
+// RESIZE
+//////////////////////////////////////////////////////
+
 window.addEventListener("resize",()=>{
 
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    canvas.width = innerWidth;
+    canvas.height = innerHeight;
 });
 
 </script>
