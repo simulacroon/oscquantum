@@ -40,6 +40,8 @@ button{
     border:1px solid white;
 
     font-family:monospace;
+
+    cursor:pointer;
 }
 
 canvas{
@@ -130,7 +132,7 @@ function draw(){
 
     push();
 
-    tint(255,60);
+    tint(255,45);
 
     translate(width,0);
 
@@ -140,13 +142,13 @@ function draw(){
 
     pop();
 
-    // FEEDBACK SUAVE
+    // FEEDBACK LIMPIO
 
     feedback.push();
 
     feedback.translate(width/2,height/2);
 
-    feedback.scale(1.003);
+    feedback.scale(1.0005);
 
     feedback.tint(255,245);
 
@@ -165,11 +167,11 @@ function draw(){
 
     feedback.pop();
 
-    // DESVANECER
+    // LIMPIEZA DEL FEEDBACK
 
     feedback.noStroke();
 
-    feedback.fill(0,20);
+    feedback.fill(0,40);
 
     feedback.rect(
         0,
@@ -177,6 +179,8 @@ function draw(){
         width,
         height
     );
+
+    // DETECCION MOVIMIENTO
 
     if(video.loadedmetadata){
 
@@ -242,7 +246,11 @@ function draw(){
         prevFrame = video.get();
     }
 
-    feedback.blendMode(SCREEN);
+    // MODO DE LUZ
+
+    feedback.blendMode(ADD);
+
+    // PARTICULAS
 
     for(let i=particles.length-1;i>=0;i--){
 
@@ -256,9 +264,11 @@ function draw(){
         }
     }
 
-    drawGradientFog();
+    // DIBUJAR FEEDBACK
 
     image(feedback,0,0);
+
+    // SCANLINES
 
     drawScanner();
 }
@@ -275,7 +285,7 @@ class Particle{
 
         this.life = 255;
 
-        this.size = random(40,120);
+        this.size = random(25,90);
 
         this.vx = random(-0.3,0.3);
 
@@ -288,7 +298,7 @@ class Particle{
 
         this.y += this.vy;
 
-        this.life -= 3;
+        this.life -= 4;
     }
 
     display(g){
@@ -317,50 +327,13 @@ class Particle{
 
             b,
 
-            this.life * 0.03
+            this.life * 0.01
         );
 
         g.ellipse(
             this.x,
             this.y,
             this.size
-        );
-    }
-}
-
-function drawGradientFog(){
-
-    for(let i=0;i<3;i++){
-
-        let x =
-            noise(frameCount*0.002+i)
-            * width;
-
-        let y =
-            noise(frameCount*0.002+i+100)
-            * height;
-
-        let s =
-            noise(frameCount*0.003+i)
-            * 600 + 200;
-
-        feedback.noStroke();
-
-        feedback.fill(
-
-            50,
-
-            120,
-
-            255,
-
-            8
-        );
-
-        feedback.ellipse(
-            x,
-            y,
-            s
         );
     }
 }
@@ -382,7 +355,7 @@ function drawScanner(){
             1,
 
             5,
-            30
+            20
         );
 
         stroke(
